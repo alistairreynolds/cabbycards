@@ -54,6 +54,30 @@ init script.
 ### Collection uniqueness spans finish & condition
 `collections` is unique on `(user_id, card_id, foil, condition)` — a foil NM and
 a non-foil LP of the same card are genuinely different stacks with different value.
+*(Superseded: the `collections` table is gone — `holdings` below carries the same
+finish/condition stacking, now keyed by location.)*
+
+### Card allocation model (ALI-18 — built)
+The differentiator: collection and decks are **not siloed**. Resolved design:
+- **Collection = everything owned.** Each owned card is a **holding** at a **location**.
+- **Locations** have kind `storage` (binders/boxes) or `deck`; a **deck is a
+  location** (kind `deck`) with `format` + `commander`. Each user gets a default
+  "Unsorted" storage location.
+- **`holdings` `(user_id, card_id, location_id, finish, condition, quantity)`
+  replaces `collections` + `deck_cards`.** Moving a card = transfer quantity
+  between locations; you always still own it. Deleting a deck relocates its
+  cards back to storage (cards aren't lost, just the list).
+- Decks also carry an **intended list** — `deck_entries (card_id, board,
+  desired_qty)`, independent of ownership. **Allocated** = owned holdings located
+  in the deck; **missing (→ ALI-14 wantlist)** = desired − owned.
+- **Ownership matching is oracle-level** (ALI-13): any printing fulfils a desired
+  card; a holding/allocation is a specific printing at a location.
+
+Implemented as a schema refactor: `collections`/`deck_cards` → `locations` +
+`holdings` + `deck_entries` (and `decks` now extends a location). Core operations
+live in `app/services/inventory.py` (`ensure_default_location`, `add_holding`,
+`move_holding`, `create_deck`, `set_deck_entry`). CRUD endpoints land with
+ALI-11/ALI-12; wantlist fulfilment with ALI-14.
 
 ### Enums are native Postgres enums storing values, not names
 SQLAlchemy defaults to persisting enum *member names* (`APPLE`). The

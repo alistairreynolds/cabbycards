@@ -23,6 +23,13 @@ class AuthIdentityType(enum.StrEnum):
     PASSKEY = "passkey"
 
 
+class LocationKind(enum.StrEnum):
+    """Where a card physically lives. A deck is a location too."""
+
+    STORAGE = "storage"
+    DECK = "deck"
+
+
 class CardCondition(enum.StrEnum):
     NEAR_MINT = "nm"
     LIGHTLY_PLAYED = "lp"

@@ -1,12 +1,13 @@
 import asyncio
+import os
 from datetime import datetime
 from logging.config import fileConfig
 
+from dotenv import load_dotenv
 from sqlalchemy import pool
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from alembic import context
-from app.core.config import get_settings
 from app.models import Base
 
 config = context.config
@@ -14,8 +15,10 @@ config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-# Single source of truth for the DSN: the app settings, not alembic.ini.
-config.set_main_option("sqlalchemy.url", get_settings().database_url)
+# Migrations only need the DB URL, not the full app config — load .env if present
+# and read DATABASE_URL directly so a migration run doesn't require every setting.
+load_dotenv()
+config.set_main_option("sqlalchemy.url", os.environ["DATABASE_URL"])
 
 target_metadata = Base.metadata
 

@@ -14,9 +14,13 @@ def pg_enum(enum_cls: type[enum.Enum], name: str) -> SAEnum:
     return SAEnum(enum_cls, name=name, values_callable=lambda obj: [e.value for e in obj])
 
 
-class AuthProvider(enum.StrEnum):
+class AuthIdentityType(enum.StrEnum):
+    """A way a user can authenticate. One user may have several."""
+
+    PASSWORD = "password"
     APPLE = "apple"
     GOOGLE = "google"
+    PASSKEY = "passkey"
 
 
 class CardCondition(enum.StrEnum):

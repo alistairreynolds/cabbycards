@@ -1,5 +1,5 @@
 from app.models.enums import (
-    AuthProvider,
+    AuthIdentityType,
     CardCondition,
     DeckBoard,
     DeckFormat,
@@ -8,11 +8,11 @@ from app.models.enums import (
 
 
 def test_pg_enum_persists_member_values_not_names() -> None:
-    # The whole point of the helper: store "apple"/"google", never "APPLE".
-    enum_type = pg_enum(AuthProvider, "auth_provider")
-    assert enum_type.name == "auth_provider"
-    emitted = enum_type.values_callable(AuthProvider)
-    assert sorted(emitted) == ["apple", "google"]
+    # The whole point of the helper: store "password"/"apple", never "PASSWORD".
+    enum_type = pg_enum(AuthIdentityType, "auth_identity_type")
+    assert enum_type.name == "auth_identity_type"
+    emitted = enum_type.values_callable(AuthIdentityType)
+    assert sorted(emitted) == ["apple", "google", "passkey", "password"]
 
 
 def test_card_condition_values_are_short_codes() -> None:

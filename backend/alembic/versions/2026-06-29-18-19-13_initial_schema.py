@@ -18,7 +18,9 @@ depends_on = None
 
 # Enum values mirror the StrEnum values in app/models/enums.py. They are spelled
 # out here so the migration is a static snapshot, independent of model code.
-_auth_provider = postgresql.ENUM("apple", "google", name="auth_provider", create_type=False)
+_auth_identity_type = postgresql.ENUM(
+    "password", "apple", "google", "passkey", name="auth_identity_type", create_type=False
+)
 _card_condition = postgresql.ENUM(
     "nm", "lp", "mp", "hp", "dmg", name="card_condition", create_type=False
 )
@@ -35,7 +37,7 @@ def upgrade() -> None:
     # Powers fuzzy card-name search via the GIN trigram index on cards.name.
     op.execute("CREATE EXTENSION IF NOT EXISTS pg_trgm")
 
-    _auth_provider.create(bind, checkfirst=True)
+    _auth_identity_type.create(bind, checkfirst=True)
     _card_condition.create(bind, checkfirst=True)
     _deck_format.create(bind, checkfirst=True)
     _deck_board.create(bind, checkfirst=True)
@@ -48,14 +50,68 @@ def upgrade() -> None:
             server_default=sa.text("gen_random_uuid()"),
             nullable=False,
         ),
-        sa.Column("email", sa.String(length=320), nullable=True),
+        sa.Column("email", sa.String(length=320), nullable=False),
         sa.Column("display_name", sa.String(length=255), nullable=True),
-        sa.Column("auth_provider", _auth_provider, nullable=False),
-        sa.Column("provider_subject", sa.String(length=255), nullable=False),
+        sa.Column("email_verified", sa.Boolean(), nullable=False, server_default=sa.text("false")),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
         sa.PrimaryKeyConstraint("id", name="pk_users"),
-        sa.UniqueConstraint("auth_provider", "provider_subject", name="uq_users_provider_identity"),
+        sa.UniqueConstraint("email", name="uq_users_email"),
+    )
+
+    op.create_table(
+        "auth_identities",
+        sa.Column(
+            "id",
+            postgresql.UUID(as_uuid=True),
+            server_default=sa.text("gen_random_uuid()"),
+            nullable=False,
+        ),
+        sa.Column("user_id", postgresql.UUID(as_uuid=True), nullable=False),
+        sa.Column("type", _auth_identity_type, nullable=False),
+        sa.Column("password_hash", sa.Text(), nullable=True),
+        sa.Column("provider_subject", sa.String(length=255), nullable=True),
+        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+        sa.PrimaryKeyConstraint("id", name="pk_auth_identities"),
+        sa.ForeignKeyConstraint(
+            ["user_id"], ["users.id"], name="fk_auth_identities_user_id_users", ondelete="CASCADE"
+        ),
+        sa.UniqueConstraint("user_id", "type", name="uq_auth_identities_user_type"),
+    )
+    op.create_index("ix_auth_identities_user_id", "auth_identities", ["user_id"])
+    # SSO subjects unique per provider; password rows (NULL subject) are excluded.
+    op.create_index(
+        "uq_auth_identities_provider_subject",
+        "auth_identities",
+        ["type", "provider_subject"],
+        unique=True,
+        postgresql_where=sa.text("provider_subject IS NOT NULL"),
+    )
+
+    op.create_table(
+        "email_verification_tokens",
+        sa.Column(
+            "id",
+            postgresql.UUID(as_uuid=True),
+            server_default=sa.text("gen_random_uuid()"),
+            nullable=False,
+        ),
+        sa.Column("user_id", postgresql.UUID(as_uuid=True), nullable=False),
+        sa.Column("token_hash", sa.String(length=64), nullable=False),
+        sa.Column("expires_at", sa.DateTime(timezone=True), nullable=False),
+        sa.Column("used_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+        sa.PrimaryKeyConstraint("id", name="pk_email_verification_tokens"),
+        sa.ForeignKeyConstraint(
+            ["user_id"], ["users.id"],
+            name="fk_email_verification_tokens_user_id_users", ondelete="CASCADE",
+        ),
+        sa.UniqueConstraint("token_hash", name="uq_email_verification_tokens_token_hash"),
+    )
+    op.create_index(
+        "ix_email_verification_tokens_user_id", "email_verification_tokens", ["user_id"]
     )
 
     op.create_table(
@@ -171,9 +227,11 @@ def downgrade() -> None:
     op.drop_table("decks")
     op.drop_table("collections")
     op.drop_table("cards")
+    op.drop_table("email_verification_tokens")
+    op.drop_table("auth_identities")
     op.drop_table("users")
 
     _deck_board.drop(bind, checkfirst=True)
     _deck_format.drop(bind, checkfirst=True)
     _card_condition.drop(bind, checkfirst=True)
-    _auth_provider.drop(bind, checkfirst=True)
+    _auth_identity_type.drop(bind, checkfirst=True)

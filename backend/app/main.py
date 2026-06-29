@@ -1,8 +1,9 @@
 from fastapi import FastAPI
 
-from app.api.routes import cards
+from app.api.routes import auth, cards
 
 app = FastAPI(title="CabbyCards API", version="0.1.0")
+app.include_router(auth.router)
 app.include_router(cards.router)
 
 

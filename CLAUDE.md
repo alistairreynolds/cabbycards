@@ -12,10 +12,10 @@ legality are first-class concerns, not afterthoughts.
 | Backend | Python ≥3.12, FastAPI, SQLAlchemy 2.0 **async** |
 | DB | PostgreSQL (default for everything), `asyncpg` driver |
 | Migrations | Alembic (async `env.py`); datestamp filenames `YYYY-MM-DD-HH-MM-SS_slug.py` (rev id uses `_` — Alembic bars `-`) |
-| Auth | Apple + Google SSO via Authlib → backend issues session JWTs (`PyJWT`) |
+| Auth | Email/password (Argon2id) + passkeys + Apple/Google SSO; session JWTs (`PyJWT`); Cloudflare Turnstile on registration |
 | Card data | Scryfall REST API, cached locally in JSONB |
 | iOS | Capacitor wrapping the Vue app + native Swift Vision scanner |
-| Hosting | AWS (existing infra) |
+| Hosting | **No AWS** — hobbyist/free tooling for now; hosting TBD. Email via SMTP (free provider) when needed, not SES |
 | Py tooling | `uv` (pyproject + `uv.lock`) |
 | Local DB | Docker Compose (`postgres:16-alpine`, host port **5433**) |
 
@@ -28,9 +28,10 @@ ios/       Capacitor + Swift scanner                  ← placeholder
 docker-compose.yml   local Postgres
 ```
 
-Backend internals: `app/core` (config, db), `app/models` (one file per
-aggregate), `app/schemas` (Pydantic), `app/services` (Scryfall ingest, card
-search), `app/api/routes`.
+Backend internals: `app/core` (config, db, **security** = Argon2 + JWT + token
+hashing), `app/models` (one file per aggregate), `app/schemas` (Pydantic),
+`app/services` (Scryfall ingest, card search, **auth**, **turnstile**, **email**),
+`app/api/routes` (cards, **auth**) + `app/api/deps.py` (current-user, etc.).
 
 ## Key architecture decisions
 
@@ -72,6 +73,27 @@ tiers **bypass** the similarity threshold, so short prefixes (e.g. "sol") aren't
 filtered out by trigram scoring. LIKE wildcards in the query are escaped
 (`_escape_like`). Tune the tiers/threshold there as the search UX evolves.
 
+### Auth — identity model (ALI-5, slice 1 built: email/password)
+One account, many login methods. `users` (email-centric, `email_verified`) +
+`auth_identities` (type `password`|`apple`|`google`|`passkey`; one per user per
+type, partial-unique SSO subject) + `email_verification_tokens` (we store the
+SHA-256 hash, email the raw token). Passwords use **Argon2id**. Sessions are a
+signed **JWT** (`app/core/security.py`). Registration is gated by **Cloudflare
+Turnstile** (dev uses Cloudflare's always-pass test key); the verifier is a
+FastAPI dependency so tests override it instead of calling the network. Email
+verification is a **soft gate** — users log in immediately; verification-gated
+actions check `email_verified`. Email goes through an `EmailSender` protocol
+(`ConsoleEmailSender` in dev; SMTP later, **no SES**). SSO + passkeys are later
+slices that bolt onto `auth_identities`.
+
+### Configuration — required vs safe defaults
+`.env.example` is the single documented source of config. In `Settings`, only
+**secrets/connection values** are required (no default): `DATABASE_URL`,
+`JWT_SECRET`, `TURNSTILE_SECRET_KEY`. Everything else (URLs, TTLs, algorithm,
+email backend) has a safe default in code and need not be set. Tests load
+`.env.example` (via conftest) so they use the documented values. Alembic reads
+only `DATABASE_URL` directly — migrations don't require the full app config.
+
 ## Conventions (apply to all code)
 
 - **British English** in identifiers/comments (`colour`, not `color`).
@@ -92,24 +114,25 @@ uv run alembic upgrade head                      # apply schema
 uv run uvicorn app.main:app --reload             # serve (/docs)
 uv run pytest                                    # hermetic tests
 uv run ruff check .                              # lint
-CABBYCARDS_DB_TESTS=1 uv run pytest tests/test_integration_db.py  # DB round-trip
-uv run alembic revision --autogenerate -m "msg"  # new migration
+# Opt-in DB integration tests (need a migrated DB; export DATABASE_URL at one):
+CABBYCARDS_DB_TESTS=1 uv run pytest   # runs hermetic + all DB integration tests
+uv run alembic revision --autogenerate -m "msg"  # new migration (datestamp rev id)
 ```
 
-## Feature roadmap (priority order — slices)
+## Backlog
 
-1. ✅ Scaffold + DB models + Scryfall cache service *(this slice)*
-2. ⬜ Auth — Apple + Google SSO → session JWT
-3. ⬜ Card search endpoints polish (pagination, ranking)
-4. ⬜ Collection management (add/remove, quantity, foil, condition)
-5. ⬜ Deck building — commander, colour-identity & format-legality filtering
-6. ⬜ "Owned only" filter in deck builder (resolve via `oracle_id`)
-7. ⬜ Missing-cards export — Cardmarket wantlist (`<qty> <name>` per line)
-8. ⬜ iOS — Capacitor shell + native Swift Vision scanner bridge
-9. ⬜ Vue frontend
+The canonical backlog lives in **Linear** (project *Cabby Cards*, issues `ALI-*`).
+Highlights beyond the original roadmap: card **allocation model** (ALI-18 —
+storage/deck are not siloed), **monetization** (ALI-6 iOS paywall + free codes),
+**admin/referrals** (ALI-7), **import/export** (ALI-20). Current near-term order:
+
+1. ✅ Scaffold + DB models + Scryfall cache (ALI-8)
+2. 🚧 Auth (ALI-5) — **slice 1 email/password + Turnstile + verification + JWT built**; SSO + passkeys to follow
+3. ⬜ Frontend scaffold (ALI-9) · Collection mgmt (ALI-11) · Deck building (ALI-12)
+4. ⬜ Owned-only filter, wantlist export, cloud sync, iOS, …
 
 ## Git
 
-Personal project — repo lives on the owner's **personal GitHub account**
-(private). `gh` is not installed locally; create the remote manually or install
-`gh` first. Nothing is pushed automatically.
+Personal project — `alistairreynolds/cabbycards` (private) on GitHub. `gh` is
+installed and authenticated (HTTPS). Feature branches per slice (e.g.
+`ali-5-auth-foundation`); nothing is committed/pushed without asking.

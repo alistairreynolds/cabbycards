@@ -10,6 +10,29 @@ from app.models.card import Card
 DEFAULT_SIMILARITY_THRESHOLD = 0.3
 
 
+def name_sort_key(query: str, name: str) -> tuple[int, int, str]:
+    """Sort key ranking a card name by how well it matches a typed query.
+
+    Tiers (lower = better): exact match, name starts with the query, query
+    appears anywhere, else. Ties break by shorter name then alphabetically.
+    Used to re-rank Scryfall search results, which otherwise come back by
+    full-text relevance (so "sol ring" surfaces "Solemn Offering").
+
+    See: tests/test_card_search.py
+    """
+    q = query.strip().lower()
+    n = name.lower()
+    if n == q:
+        tier = 0
+    elif n.startswith(q):
+        tier = 1
+    elif q in n:
+        tier = 2
+    else:
+        tier = 3
+    return (tier, len(name), n)
+
+
 def _escape_like(term: str) -> str:
     """Escape LIKE wildcards so user input is matched literally, not as a pattern.
 

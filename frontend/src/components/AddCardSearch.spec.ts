@@ -48,14 +48,25 @@ it("clears results and does not search when the query is emptied", async () => {
   expect(wrapper.findAll("li")).toHaveLength(0)
 })
 
-it("emits add with the chosen card when a result is clicked", async () => {
+it("auto-focuses the search input on mount", () => {
+  const wrapper = mount(AddCardSearch, { attachTo: document.body })
+  expect(document.activeElement).toBe(wrapper.find("input").element)
+  wrapper.unmount()
+})
+
+it("emits add and clears the input after a result is chosen", async () => {
   mockApi.mockResolvedValue([SOL_RING])
-  const wrapper = mount(AddCardSearch)
-  await wrapper.find("input").setValue("sol")
+  const wrapper = mount(AddCardSearch, { attachTo: document.body })
+  const input = wrapper.find("input")
+  await input.setValue("sol")
   vi.advanceTimersByTime(200)
   await flushPromises()
 
   await wrapper.find("button[title='Add Sol Ring']").trigger("click")
+  await flushPromises()
 
   expect(wrapper.emitted("add")?.[0]).toEqual([SOL_RING])
+  expect((input.element as HTMLInputElement).value).toBe("")
+  expect(wrapper.findAll("li")).toHaveLength(0)
+  wrapper.unmount()
 })

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onUnmounted, ref, watch } from "vue"
+import { nextTick, onMounted, onUnmounted, ref, watch } from "vue"
 
 import { apiFetch } from "@/lib/api"
 import { debounce } from "@/lib/debounce"
@@ -18,6 +18,22 @@ const query = ref("")
 const results = ref<SearchCard[]>([])
 const busy = ref(false)
 const error = ref<string | null>(null)
+const inputRef = ref<HTMLInputElement | null>(null)
+
+function focusInput(): void {
+  inputRef.value?.focus()
+}
+
+// Auto-focus the search box whenever the Add panel opens (the component mounts).
+onMounted(focusInput)
+
+function choose(card: SearchCard): void {
+  emit("add", card)
+  // Clear and refocus so the next card can be typed straight away.
+  query.value = ""
+  results.value = []
+  void nextTick(focusInput)
+}
 
 async function runSearch(): Promise<void> {
   const term = query.value.trim()
@@ -71,6 +87,7 @@ function thumbnail(card: SearchCard): string | undefined {
     <form @submit.prevent="searchNow">
       <div class="flex items-center gap-2">
         <input
+          ref="inputRef"
           v-model="query"
           type="search"
           placeholder="Start typing a card name…"
@@ -89,7 +106,7 @@ function thumbnail(card: SearchCard): string | undefined {
           type="button"
           class="group w-full text-left"
           :title="`Add ${card.name}`"
-          @click="emit('add', card)"
+          @click="choose(card)"
         >
           <img
             v-if="thumbnail(card)"

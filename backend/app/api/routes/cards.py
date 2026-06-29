@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_scryfall_service
 from app.core.db import get_session
 from app.schemas.card import CardOut
-from app.services.card_search import search_cached_cards
+from app.services.card_search import name_sort_key, search_cached_cards
 from app.services.scryfall import ScryfallError, ScryfallService
 
 router = APIRouter(prefix="/cards", tags=["cards"])
@@ -17,12 +17,16 @@ async def search_cards(
     q: str = Query(min_length=1, description="Scryfall search syntax"),
     service: ScryfallService = Depends(get_scryfall_service),
 ) -> list[CardOut]:
-    """Search Scryfall live; every returned card is cached locally as a side effect."""
+    """Search Scryfall live; every returned card is cached locally as a side effect.
+
+    Results are re-ranked by name relevance to the query, since Scryfall returns
+    them by full-text relevance (which ranks "Solemn Offering" for "sol ring").
+    """
     try:
         cards = await service.search(q)
     except ScryfallError as exc:
         raise HTTPException(status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc
-    return cards
+    return sorted(cards, key=lambda card: name_sort_key(q, card.name))
 
 
 @router.get("/local-search", response_model=list[CardOut])

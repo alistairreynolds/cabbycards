@@ -22,9 +22,9 @@ legality are first-class concerns, not afterthoughts.
 ## Monorepo layout
 
 ```
-backend/   FastAPI app, models, services, Alembic    ← built
-frontend/  Vue 3 SPA                                  ← placeholder
-ios/       Capacitor + Swift scanner                  ← placeholder
+backend/   FastAPI app, models, services, Alembic       ← built
+frontend/  Vue 3 + TS + Pinia + Router + Tailwind SPA    ← scaffold built
+ios/       Capacitor + Swift scanner                     ← placeholder
 docker-compose.yml   local Postgres
 ```
 

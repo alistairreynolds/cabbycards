@@ -11,9 +11,13 @@ dependencies = [
     "alembic>=1.14",
     "pydantic>=2.10",
     "pydantic-settings>=2.7",
+    # EmailStr validation for auth request schemas.
+    "email-validator>=2.2",
     "httpx>=0.28",
-    # Issues/verifies session JWTs. Apple/Google OAuth (Authlib) lands with the auth slice.
+    # Issues/verifies session JWTs. Apple/Google OAuth (Authlib) lands with a later auth slice.
     "pyjwt>=2.10",
+    # Argon2id password hashing for email/password auth.
+    "argon2-cffi>=23.1",
 ]
 
 [dependency-groups]

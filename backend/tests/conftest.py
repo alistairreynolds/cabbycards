@@ -1,9 +1,9 @@
-import os
+from pathlib import Path
 
-# Importing app.core.db constructs the async engine at import time, which needs a
-# DSN. Default one here so the hermetic unit tests import cleanly without a real
-# database or a .env file present. Integration tests override this.
-os.environ.setdefault(
-    "DATABASE_URL",
-    "postgresql+asyncpg://cabbycards:cabbycards@localhost:5433/cabbycards",
-)
+from dotenv import load_dotenv
+
+# Load the documented example config so tests use the same values as .env.example
+# rather than anything hardcoded in code. override=False means a real env var
+# (e.g. an integration DATABASE_URL exported before pytest) still wins.
+_ENV_EXAMPLE = Path(__file__).resolve().parent.parent / ".env.example"
+load_dotenv(_ENV_EXAMPLE, override=False)

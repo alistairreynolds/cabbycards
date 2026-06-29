@@ -1,11 +1,10 @@
 import uuid
 
-from sqlalchemy import String, UniqueConstraint, text
+from sqlalchemy import Boolean, String, text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base, TimestampMixin
-from app.models.enums import AuthProvider, pg_enum
 
 
 class User(Base, TimestampMixin):
@@ -18,16 +17,12 @@ class User(Base, TimestampMixin):
         server_default=text("gen_random_uuid()"),
     )
 
-    # Apple can withhold the real address (private relay), so email is optional.
-    email: Mapped[str | None] = mapped_column(String(320), nullable=True)
+    # The account's canonical identifier; stored lowercased so it stays unique
+    # case-insensitively. Auth methods (password, SSO, passkey) hang off
+    # auth_identities, so one account can have several.
+    email: Mapped[str] = mapped_column(String(320), unique=True, nullable=False)
     display_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
-    auth_provider: Mapped[AuthProvider] = mapped_column(
-        pg_enum(AuthProvider, "auth_provider"), nullable=False
-    )
-    # The provider's stable subject identifier (Apple/Google `sub` claim).
-    provider_subject: Mapped[str] = mapped_column(String(255), nullable=False)
-
-    __table_args__ = (
-        UniqueConstraint("auth_provider", "provider_subject", name="uq_users_provider_identity"),
-    )
+    # Soft gate: users can sign in unverified, but verification-gated actions
+    # check this flag.
+    email_verified: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)

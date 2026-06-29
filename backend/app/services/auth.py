@@ -13,10 +13,16 @@ from app.core.security import (
 from app.models.auth_identity import AuthIdentity
 from app.models.email_verification_token import EmailVerificationToken
 from app.models.enums import AuthIdentityType
+from app.models.password_reset_token import PasswordResetToken
 from app.models.user import User
-from app.services.email import EmailSender, send_verification_email
+from app.services.email import (
+    EmailSender,
+    send_password_reset_email,
+    send_verification_email,
+)
 
 _VERIFICATION_TTL_HOURS = 24
+_RESET_TTL_HOURS = 1
 
 
 class AuthError(Exception):
@@ -33,6 +39,10 @@ class InvalidCredentials(AuthError):
 
 class InvalidVerificationToken(AuthError):
     """Email-verification token is unknown, already used, or expired."""
+
+
+class InvalidResetToken(AuthError):
+    """Password-reset token is unknown, already used, or expired."""
 
 
 def _normalise_email(email: str) -> str:
@@ -146,4 +156,100 @@ async def verify_email_token(
     user.email_verified = True
     token.used_at = now
     await session.commit()
+    return user
+
+
+async def create_password_reset_token(
+    session: AsyncSession,
+    user: User,
+    *,
+    ttl_hours: int = _RESET_TTL_HOURS,
+    now: datetime | None = None,
+) -> str:
+    """Persist a single-use password-reset token, returning the raw value.
+
+    See: tests/test_password_reset_service.py
+    """
+    now = now or datetime.now(UTC)
+    raw, token_hash = generate_verification_token()
+    session.add(
+        PasswordResetToken(
+            user_id=user.id,
+            token_hash=token_hash,
+            expires_at=now + timedelta(hours=ttl_hours),
+        )
+    )
+    await session.commit()
+    return raw
+
+
+async def request_password_reset(
+    session: AsyncSession,
+    *,
+    email: str,
+    settings: Settings,
+    email_sender: EmailSender,
+    now: datetime | None = None,
+) -> None:
+    """Email a reset link if the address has a password account.
+
+    Always returns without error and sends nothing for unknown addresses, so
+    callers can't use it to discover which emails are registered.
+
+    See: tests/test_password_reset_service.py
+    """
+    normalised = _normalise_email(email)
+    user = await session.scalar(select(User).where(User.email == normalised))
+    if user is None:
+        return
+
+    identity = await session.scalar(
+        select(AuthIdentity).where(
+            AuthIdentity.user_id == user.id,
+            AuthIdentity.type == AuthIdentityType.PASSWORD,
+        )
+    )
+    if identity is None:
+        return
+
+    raw_token = await create_password_reset_token(session, user, now=now)
+    await send_password_reset_email(email_sender, normalised, raw_token, settings)
+
+
+async def reset_password(
+    session: AsyncSession,
+    *,
+    raw_token: str,
+    new_password: str,
+    now: datetime | None = None,
+) -> User:
+    """Consume a reset token and set a new password on the password identity.
+
+    See: tests/test_password_reset_service.py
+    """
+    now = now or datetime.now(UTC)
+    token = await session.scalar(
+        select(PasswordResetToken).where(
+            PasswordResetToken.token_hash == hash_token(raw_token)
+        )
+    )
+    if token is None or token.used_at is not None or token.expires_at <= now:
+        raise InvalidResetToken()
+
+    identity = await session.scalar(
+        select(AuthIdentity).where(
+            AuthIdentity.user_id == token.user_id,
+            AuthIdentity.type == AuthIdentityType.PASSWORD,
+        )
+    )
+    if identity is None:
+        raise InvalidResetToken()
+
+    identity.password_hash = hash_password(new_password)
+    token.used_at = now
+    await session.commit()
+
+    user = await session.get(User, token.user_id)
+    if user is None:
+        raise InvalidResetToken()
     return user

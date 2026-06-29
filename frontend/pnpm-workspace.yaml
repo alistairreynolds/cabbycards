@@ -1,0 +1,4 @@
+# Allow esbuild (used by Vite/Vitest) to run its install script to set up the
+# platform binary. pnpm blocks build scripts by default for supply-chain safety.
+allowBuilds:
+  esbuild: true

@@ -11,7 +11,17 @@ Monorepo:
 
 See [`CLAUDE.md`](./CLAUDE.md) for architecture decisions and conventions.
 
-## Backend quick start
+## Run the whole stack (Docker)
+
+```bash
+docker compose up --build      # db + backend (migrates on start) + frontend
+```
+
+Then open **http://localhost:5173**, click **Sign up** (dev uses Cloudflare's
+always-pass Turnstile test key, so no real key needed), and you're in the
+collection. The API is at http://localhost:8000/docs.
+
+## Backend quick start (without Docker)
 
 ```bash
 docker compose up -d db                 # Postgres on host port 5433

@@ -17,5 +17,31 @@ services:
       timeout: 5s
       retries: 5
 
+  backend:
+    build: ./backend
+    container_name: cabbycards-backend
+    environment:
+      # Talks to the db service over the compose network (internal port 5432).
+      DATABASE_URL: postgresql+asyncpg://cabbycards:cabbycards@db:5432/cabbycards
+      # Dev-only secrets. Turnstile value is Cloudflare's always-pass test key.
+      JWT_SECRET: dev-insecure-change-me-please-0123456789
+      TURNSTILE_SECRET_KEY: 1x0000000000000000000000000000000AA
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+
+  frontend:
+    build: ./frontend
+    container_name: cabbycards-frontend
+    environment:
+      # Vite dev-server proxies /api here (see frontend/vite.config.ts).
+      BACKEND_URL: http://backend:8000
+    depends_on:
+      - backend
+    ports:
+      - "5173:5173"
+
 volumes:
   cabbycards_pgdata:

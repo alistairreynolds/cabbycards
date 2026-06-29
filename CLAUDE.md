@@ -23,9 +23,9 @@ legality are first-class concerns, not afterthoughts.
 
 ```
 backend/   FastAPI app, models, services, Alembic       ← built
-frontend/  Vue 3 + TS + Pinia + Router + Tailwind SPA    ← scaffold built
+frontend/  Vue 3 + TS + Pinia + Router + Tailwind SPA    ← collection UI + theme
 ios/       Capacitor + Swift scanner                     ← placeholder
-docker-compose.yml   local Postgres
+docker-compose.yml   db + backend + frontend (docker compose up --build)
 ```
 
 Backend internals: `app/core` (config, db, **security** = Argon2 + JWT + token
@@ -119,6 +119,15 @@ slices that bolt onto `auth_identities`.
 email backend) has a safe default in code and need not be set. Tests load
 `.env.example` (via conftest) so they use the documented values. Alembic reads
 only `DATABASE_URL` directly — migrations don't require the full app config.
+
+### Frontend (ALI-9 scaffold, ALI-11 collection UI)
+Vue 3 + TS + Pinia + Router + Tailwind v4 + Vitest + ESLint. **Theme**: brand
+`#d17026` (`bg-brand-500`, …) with **light/dark** via a `.dark` class on `<html>`
+toggled by `stores/theme.ts` (persisted; applied pre-mount in `main.ts`).
+`lib/api.ts` is the fetch wrapper (`/api` prefix, Bearer token); Pinia stores
+`auth` + `collection`. The collection view is **location-organised** (the ALI-18
+model). Dev registration sends the always-pass Turnstile test token (real widget
+later). Deck-builder UX will follow Archidekt's stacked layout (ALI-12).
 
 ## Conventions (apply to all code)
 

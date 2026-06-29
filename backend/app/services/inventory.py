@@ -1,3 +1,6 @@
+import uuid
+from collections.abc import Sequence
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -12,6 +15,66 @@ _DEFAULT_STORAGE_NAME = "Unsorted"
 
 class InsufficientQuantity(Exception):
     """A move asked for more copies than the source location holds."""
+
+
+async def list_locations(session: AsyncSession, user: User) -> Sequence[Location]:
+    """All of a user's locations (storage + decks), oldest first.
+
+    See: tests/test_collection_api.py
+    """
+    result = await session.scalars(
+        select(Location).where(Location.user_id == user.id).order_by(Location.created_at)
+    )
+    return result.all()
+
+
+async def get_owned_location(
+    session: AsyncSession, user: User, location_id: uuid.UUID
+) -> Location | None:
+    """Fetch a location only if it belongs to the user (else None).
+
+    See: tests/test_collection_api.py
+    """
+    return await session.scalar(
+        select(Location).where(Location.id == location_id, Location.user_id == user.id)
+    )
+
+
+async def list_holdings(session: AsyncSession, user: User) -> Sequence[Holding]:
+    """All holdings the user owns (across every location), with card + location.
+
+    See: tests/test_collection_api.py
+    """
+    result = await session.scalars(
+        select(Holding)
+        .join(Location, Holding.location_id == Location.id)
+        .where(Location.user_id == user.id)
+        .order_by(Holding.created_at)
+    )
+    return result.all()
+
+
+async def get_owned_holding(
+    session: AsyncSession, user: User, holding_id: uuid.UUID
+) -> Holding | None:
+    """Fetch a holding only if it belongs to the user (via its location).
+
+    See: tests/test_collection_api.py
+    """
+    return await session.scalar(
+        select(Holding)
+        .join(Location, Holding.location_id == Location.id)
+        .where(Holding.id == holding_id, Location.user_id == user.id)
+    )
+
+
+async def remove_holding(session: AsyncSession, holding: Holding) -> None:
+    """Delete a holding outright (remove the stack from its location).
+
+    See: tests/test_collection_api.py
+    """
+    await session.delete(holding)
+    await session.commit()
 
 
 async def ensure_default_location(session: AsyncSession, user: User) -> Location:

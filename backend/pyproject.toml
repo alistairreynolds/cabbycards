@@ -1,0 +1,49 @@
+[project]
+name = "cabbycards-backend"
+version = "0.1.0"
+description = "CabbyCards backend — MTG collection & deck management API"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.34",
+    "sqlalchemy[asyncio]>=2.0.36",
+    "asyncpg>=0.30",
+    "alembic>=1.14",
+    "pydantic>=2.10",
+    "pydantic-settings>=2.7",
+    "httpx>=0.28",
+    # Issues/verifies session JWTs. Apple/Google OAuth (Authlib) lands with the auth slice.
+    "pyjwt>=2.10",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3",
+    "pytest-asyncio>=0.25",
+    "ruff>=0.9",
+]
+
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+# One shared event loop for the whole session: the module-level async engine pools
+# connections bound to the loop that created them, so per-test loops would reuse a
+# connection from a closed loop ("Event loop is closed"). Session scope avoids that.
+asyncio_default_test_loop_scope = "session"
+asyncio_default_fixture_loop_scope = "session"
+testpaths = ["tests"]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+# B008: FastAPI's Depends() default-argument pattern is intentional, not a bug.
+ignore = ["B008"]
+
+[tool.ruff.lint.per-file-ignores]
+# Migrations are static snapshots; long inline column definitions read fine.
+"alembic/versions/*" = ["E501"]

@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# Node / frontend
+node_modules/
+dist/
+.vite/
+
+# iOS / Capacitor
+ios/App/Pods/
+ios/App/build/
+DerivedData/
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
+*.swp

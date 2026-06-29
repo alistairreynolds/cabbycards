@@ -2,10 +2,12 @@ import uuid
 
 from sqlalchemy import BigInteger, Boolean, ForeignKey, Integer, UniqueConstraint, text
 from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, TimestampMixin
+from app.models.card import Card
 from app.models.enums import CardCondition, pg_enum
+from app.models.location import Location
 
 
 class Holding(Base, TimestampMixin):
@@ -42,6 +44,10 @@ class Holding(Base, TimestampMixin):
         nullable=False,
         default=CardCondition.NEAR_MINT,
     )
+
+    # Eager-loaded so a holding can be serialised with its card + location in one go.
+    card: Mapped[Card] = relationship(lazy="joined")
+    location: Mapped[Location] = relationship(lazy="joined")
 
     __table_args__ = (
         UniqueConstraint(

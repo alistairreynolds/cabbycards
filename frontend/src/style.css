@@ -1,1 +1,18 @@
 @import "tailwindcss";
+
+/* Class-based dark mode: toggle `.dark` on <html> (see stores/theme.ts). */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* Brand palette around #d17026 (burnt orange). */
+@theme {
+  --color-brand-50: #fdf3ec;
+  --color-brand-100: #f9e0cd;
+  --color-brand-200: #f2c09b;
+  --color-brand-300: #ea9b66;
+  --color-brand-400: #e07b3c;
+  --color-brand-500: #d17026;
+  --color-brand-600: #b85e1d;
+  --color-brand-700: #95491a;
+  --color-brand-800: #6f3717;
+  --color-brand-900: #4d2710;
+}

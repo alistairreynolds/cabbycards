@@ -44,3 +44,28 @@ async def send_verification_email(
         "If you didn't sign up, you can ignore this message."
     )
     await sender.send(to, "Verify your CabbyCards email", body)
+
+
+def build_reset_url(raw_token: str, settings: Settings) -> str:
+    """Build the frontend link a user clicks to reset their password.
+
+    See: tests/test_email.py
+    """
+    return f"{settings.frontend_base_url}/reset-password?token={raw_token}"
+
+
+async def send_password_reset_email(
+    sender: EmailSender, to: str, raw_token: str, settings: Settings
+) -> None:
+    """Compose and send the password-reset message.
+
+    See: tests/test_email.py
+    """
+    url = build_reset_url(raw_token, settings)
+    body = (
+        "Someone (hopefully you) asked to reset your CabbyCards password.\n\n"
+        f"Reset it here:\n{url}\n\n"
+        "If you didn't request this, you can ignore this message — your password "
+        "won't change."
+    )
+    await sender.send(to, "Reset your CabbyCards password", body)

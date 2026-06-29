@@ -3,7 +3,9 @@ import logging
 from app.core.config import get_settings
 from app.services.email import (
     ConsoleEmailSender,
+    build_reset_url,
     build_verification_url,
+    send_password_reset_email,
     send_verification_email,
 )
 
@@ -39,3 +41,19 @@ async def test_send_verification_email_includes_the_link() -> None:
     to, _subject, body = spy.sent[0]
     assert to == "player@example.com"
     assert build_verification_url("raw-token-xyz", settings) in body
+
+
+def test_build_reset_url_points_at_frontend() -> None:
+    url = build_reset_url("abc123", get_settings())
+    assert url == "http://localhost:5173/reset-password?token=abc123"
+
+
+async def test_send_password_reset_email_includes_the_link() -> None:
+    spy = _SpySender()
+    settings = get_settings()
+
+    await send_password_reset_email(spy, "player@example.com", "reset-tok", settings)
+
+    to, _subject, body = spy.sent[0]
+    assert to == "player@example.com"
+    assert build_reset_url("reset-tok", settings) in body

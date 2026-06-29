@@ -73,7 +73,7 @@ tiers **bypass** the similarity threshold, so short prefixes (e.g. "sol") aren't
 filtered out by trigram scoring. LIKE wildcards in the query are escaped
 (`_escape_like`). Tune the tiers/threshold there as the search UX evolves.
 
-### Auth — identity model (ALI-5, slice 1 built: email/password)
+### Auth — identity model (ALI-5; built: email/password + password reset)
 One account, many login methods. `users` (email-centric, `email_verified`) +
 `auth_identities` (type `password`|`apple`|`google`|`passkey`; one per user per
 type, partial-unique SSO subject) + `email_verification_tokens` (we store the
@@ -82,7 +82,9 @@ signed **JWT** (`app/core/security.py`). Registration is gated by **Cloudflare
 Turnstile** (dev uses Cloudflare's always-pass test key); the verifier is a
 FastAPI dependency so tests override it instead of calling the network. Email
 verification is a **soft gate** — users log in immediately; verification-gated
-actions check `email_verified`. Email goes through an `EmailSender` protocol
+actions check `email_verified`. **Password reset** mirrors verification
+(`password_reset_tokens`, hashed single-use token, 1h TTL, enumeration-safe
+`forgot-password` that always 202s, Turnstile-protected). Email goes through an `EmailSender` protocol
 (`ConsoleEmailSender` in dev; SMTP later, **no SES**). SSO + passkeys are later
 slices that bolt onto `auth_identities`.
 

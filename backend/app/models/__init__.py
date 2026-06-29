@@ -1,9 +1,10 @@
 from app.models.auth_identity import AuthIdentity
 from app.models.base import Base
 from app.models.card import Card
-from app.models.collection import CollectionEntry
-from app.models.deck import Deck, DeckCard
+from app.models.deck import Deck, DeckEntry
 from app.models.email_verification_token import EmailVerificationToken
+from app.models.holding import Holding
+from app.models.location import Location
 from app.models.password_reset_token import PasswordResetToken
 from app.models.user import User
 
@@ -13,10 +14,11 @@ __all__ = [
     "AuthIdentity",
     "Base",
     "Card",
-    "CollectionEntry",
     "Deck",
-    "DeckCard",
+    "DeckEntry",
     "EmailVerificationToken",
+    "Holding",
+    "Location",
     "PasswordResetToken",
     "User",
 ]

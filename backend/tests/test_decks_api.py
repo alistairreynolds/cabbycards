@@ -148,3 +148,71 @@ async def test_card_search_show_all_drops_identity_filter() -> None:
         deck_id = (await ac.post("/decks", headers=headers, json={"name": "EDH"})).json()["id"]
         await ac.get(f"/decks/{deck_id}/card-search?q=ring&show_all=true", headers=headers)
     assert fake.last_identity is None  # show_all → no identity filter
+
+
+async def test_patch_deck_card_updates_desired_quantity() -> None:
+    user, card = await _seed_user_and_card()
+    app.dependency_overrides[get_scryfall_service] = lambda: _FakeScryfall(card)
+    headers = _auth(user)
+    async with _client() as ac:
+        deck_id = (await ac.post("/decks", headers=headers, json={"name": "EDH"})).json()["id"]
+        await ac.post(
+            f"/decks/{deck_id}/cards",
+            headers=headers,
+            json={"scryfall_id": str(uuid.uuid4()), "quantity": 1},
+        )
+        view = (await ac.get(f"/decks/{deck_id}", headers=headers)).json()
+        card_id = view["cards"][0]["card"]["id"]
+
+        patched = await ac.patch(
+            f"/decks/{deck_id}/cards",
+            headers=headers,
+            json={"card_id": card_id, "board": "main", "desired_quantity": 3},
+        )
+        assert patched.status_code == 200
+        row = next(r for r in patched.json()["cards"] if r["card"]["id"] == card_id)
+        assert row["desired_quantity"] == 3
+
+
+async def test_patch_deck_card_quantity_zero_removes_entry() -> None:
+    user, card = await _seed_user_and_card()
+    app.dependency_overrides[get_scryfall_service] = lambda: _FakeScryfall(card)
+    headers = _auth(user)
+    async with _client() as ac:
+        deck_id = (await ac.post("/decks", headers=headers, json={"name": "EDH"})).json()["id"]
+        await ac.post(
+            f"/decks/{deck_id}/cards",
+            headers=headers,
+            json={"scryfall_id": str(uuid.uuid4()), "quantity": 1},
+        )
+        view = (await ac.get(f"/decks/{deck_id}", headers=headers)).json()
+        card_id = view["cards"][0]["card"]["id"]
+
+        patched = await ac.patch(
+            f"/decks/{deck_id}/cards",
+            headers=headers,
+            json={"card_id": card_id, "board": "main", "desired_quantity": 0},
+        )
+        assert patched.status_code == 200
+        assert patched.json()["cards"] == []
+
+
+async def test_delete_deck_card_removes_entry() -> None:
+    user, card = await _seed_user_and_card()
+    app.dependency_overrides[get_scryfall_service] = lambda: _FakeScryfall(card)
+    headers = _auth(user)
+    async with _client() as ac:
+        deck_id = (await ac.post("/decks", headers=headers, json={"name": "EDH"})).json()["id"]
+        await ac.post(
+            f"/decks/{deck_id}/cards",
+            headers=headers,
+            json={"scryfall_id": str(uuid.uuid4()), "quantity": 1},
+        )
+        view = (await ac.get(f"/decks/{deck_id}", headers=headers)).json()
+        card_id = view["cards"][0]["card"]["id"]
+
+        deleted = await ac.delete(
+            f"/decks/{deck_id}/cards/{card_id}?board=main", headers=headers
+        )
+        assert deleted.status_code == 200
+        assert deleted.json()["cards"] == []

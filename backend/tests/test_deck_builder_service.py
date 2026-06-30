@@ -16,6 +16,7 @@ from app.services.deck_builder import (
     build_deck_view,
     delete_deck,
     remove_card_from_deck,
+    set_commander,
 )
 from app.services.inventory import (
     add_holding,
@@ -191,3 +192,66 @@ async def test_delete_deck_relocates_holdings_and_removes_deck() -> None:
 
         assert await session.get(Deck, deck_location_id) is None
         assert await _qty_at(session, storage_id, card_id) == 1
+
+
+async def test_owned_in_another_deck_does_not_suppress_missing() -> None:
+    """A copy allocated to another deck is NOT available to fill this deck's gap."""
+    async with async_session_factory() as session:
+        user = await _make_user(session)
+        card = await _make_card(session)
+        await ensure_default_location(session, user)
+        this_deck = await create_deck(session, user=user, name="This", format=DeckFormat.COMMANDER)
+        other_deck = await create_deck(
+            session, user=user, name="Other", format=DeckFormat.COMMANDER
+        )
+        # The single copy lives in the other deck's location (kind=deck).
+        await add_holding(session, location=other_deck.location, card_id=card.id, quantity=1)
+
+        # Add the card as a desired entry in this_deck (no copy here).
+        await add_card_to_deck(
+            session, deck=this_deck, card_id=card.id, board=DeckBoard.MAIN, quantity=1
+        )
+
+        view = await build_deck_view(session, deck=this_deck)
+        row = next(r for r in view["cards"] if r["card"].id == card.id)
+        assert row["owned_elsewhere_quantity"] == 0
+        assert row["missing_quantity"] == 1
+
+
+async def test_owned_in_storage_still_counts_as_owned_elsewhere() -> None:
+    """A copy in a storage binder (not this deck) satisfies the desired count."""
+    async with async_session_factory() as session:
+        user = await _make_user(session)
+        card = await _make_card(session)
+        binder = await create_storage_location(session, user, "Binder")
+        await ensure_default_location(session, user)
+        deck = await create_deck(session, user=user, name="EDH", format=DeckFormat.COMMANDER)
+        await add_holding(session, location=binder, card_id=card.id, quantity=1)
+
+        # Entry-only: auto_allocate=False so the copy stays in the binder.
+        await add_card_to_deck(
+            session, deck=deck, card_id=card.id, board=DeckBoard.MAIN, quantity=1,
+            auto_allocate=False,
+        )
+
+        view = await build_deck_view(session, deck=deck)
+        row = next(r for r in view["cards"] if r["card"].id == card.id)
+        assert row["owned_elsewhere_quantity"] == 1
+        assert row["missing_quantity"] == 0
+
+
+async def test_set_commander_sets_and_clears() -> None:
+    """set_commander sets and clears the commander; caller owns the commit."""
+    async with async_session_factory() as session:
+        user = await _make_user(session)
+        card = await _make_card(session, name="Atraxa")
+        await ensure_default_location(session, user)
+        deck = await create_deck(session, user=user, name="EDH", format=DeckFormat.COMMANDER)
+
+        await set_commander(session, deck=deck, commander_card_id=card.id)
+        await session.commit()
+        assert deck.commander_card_id == card.id
+
+        await set_commander(session, deck=deck, commander_card_id=None)
+        await session.commit()
+        assert deck.commander_card_id is None

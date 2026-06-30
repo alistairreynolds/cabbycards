@@ -214,10 +214,11 @@ async def set_commander(
 ) -> None:
     """Set (or clear) the deck's commander. Legality is reported by the view, not enforced here.
 
+    The caller is responsible for committing after this call.
+
     See: tests/test_deck_builder_service.py
     """
     deck.commander_card_id = commander_card_id
-    await session.commit()
 
 
 async def delete_deck(session: AsyncSession, *, deck: Deck) -> None:
@@ -281,7 +282,9 @@ async def build_deck_view(session: AsyncSession, *, deck: Deck) -> dict:
         key = _oracle_key(holding.card)
         if holding.location_id == deck.location_id:
             allocated_by_key[key] = allocated_by_key.get(key, 0) + holding.quantity
-        else:
+        elif holding.location.kind == LocationKind.STORAGE:
+            # Only storage-kind locations count as "owned elsewhere"; copies
+            # committed to other decks are not available to fill this deck's gaps.
             owned_elsewhere_by_key[key] = owned_elsewhere_by_key.get(key, 0) + holding.quantity
 
     rows: list[dict] = []

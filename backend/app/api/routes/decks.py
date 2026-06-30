@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user, get_owned_deck, get_scryfall_service
 from app.core.db import get_session
-from app.models.deck import DeckEntry
+from app.models.deck import Deck, DeckEntry
 from app.models.enums import DeckBoard
 from app.models.user import User
 from app.schemas.deck import (
@@ -42,7 +42,7 @@ def _view_to_schema(view: dict) -> DeckView:
     )
 
 
-async def _require_deck(session: AsyncSession, user: User, deck_id: uuid.UUID):
+async def _require_deck(session: AsyncSession, user: User, deck_id: uuid.UUID) -> Deck:
     deck = await get_owned_deck(session, user, deck_id)
     if deck is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Deck not found")
@@ -92,11 +92,14 @@ async def list_decks(
     for location in await list_locations(session, user):
         if location.kind.value != "deck":
             continue
-        deck = await _require_deck(session, user, location.id)
+        deck = await get_owned_deck(session, user, location.id)
+        if deck is None:
+            continue
         view = await build_deck_view(session, deck=deck)
         desired = sum(row["desired_quantity"] for row in view["cards"])
         owned = sum(
-            min(row["desired_quantity"], row["allocated_quantity"] + row["owned_elsewhere_quantity"])  # noqa: E501
+            min(row["desired_quantity"],
+                row["allocated_quantity"] + row["owned_elsewhere_quantity"])
             for row in view["cards"]
         )
         summaries.append(

@@ -2,6 +2,8 @@
 import { computed, onMounted, ref } from "vue"
 import { useRoute } from "vue-router"
 
+import AddCardSearch from "@/components/AddCardSearch.vue"
+import PrintingSelector from "@/components/PrintingSelector.vue"
 import { useDecksStore, type DeckCard } from "@/stores/decks"
 
 const store = useDecksStore()
@@ -38,6 +40,18 @@ function ownershipClass(card: DeckCard): string {
   if (card.missing_quantity > 0) return "text-red-600"
   if (card.allocated_quantity < card.desired_quantity) return "text-amber-600"
   return "text-emerald-600"
+}
+
+interface SearchCard { scryfall_id: string; name: string; data: Record<string, unknown> }
+const picked = ref<SearchCard | null>(null)
+
+function onPick(card: SearchCard): void {
+  picked.value = card
+}
+
+async function onSelectPrinting(payload: { scryfall_id: string; foil: boolean; condition: string }): Promise<void> {
+  await store.addCard(deckId, { ...payload, board: activeBoard.value, quantity: 1 })
+  picked.value = null
 }
 </script>
 
@@ -95,5 +109,16 @@ function ownershipClass(card: DeckCard): string {
         </ul>
       </div>
     </div>
+
+    <aside class="mt-6">
+      <h2 class="mb-2 text-sm font-medium">Add a card</h2>
+      <AddCardSearch :search-path="`/decks/${deckId}/card-search`" @add="onPick" />
+      <PrintingSelector
+        v-if="picked"
+        :oracle-scryfall-id="picked.scryfall_id"
+        class="mt-3"
+        @select="onSelectPrinting"
+      />
+    </aside>
   </section>
 </template>

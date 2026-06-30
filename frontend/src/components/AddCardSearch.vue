@@ -12,6 +12,7 @@ interface SearchCard {
 
 const DEBOUNCE_MS = 200
 
+const props = withDefaults(defineProps<{ searchPath?: string }>(), { searchPath: "/cards/search" })
 const emit = defineEmits<{ add: [card: SearchCard] }>()
 
 const query = ref("")
@@ -44,7 +45,10 @@ async function runSearch(): Promise<void> {
   busy.value = true
   error.value = null
   try {
-    results.value = await apiFetch<SearchCard[]>(`/cards/search?q=${encodeURIComponent(term)}`)
+    const sep = props.searchPath.includes("?") ? "&" : "?"
+    results.value = await apiFetch<SearchCard[]>(
+      `${props.searchPath}${sep}q=${encodeURIComponent(term)}`,
+    )
   } catch {
     error.value = "Search failed — try again."
     results.value = []

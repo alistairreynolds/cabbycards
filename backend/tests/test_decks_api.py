@@ -114,3 +114,37 @@ async def test_delete_deck() -> None:
         deleted = await ac.delete(f"/decks/{deck_id}", headers=headers)
         assert deleted.status_code == 204
         assert (await ac.get(f"/decks/{deck_id}", headers=headers)).status_code == 404
+
+
+class _FakeSearchScryfall:
+    def __init__(self, results: list[Card]) -> None:
+        self._results = results
+        self.last_identity = "unset"
+
+    async def search_cards(self, query, *, identity=None, format=None):
+        self.last_identity = identity
+        return self._results
+
+
+async def test_card_search_uses_commander_identity() -> None:
+    user, card = await _seed_user_and_card()
+    fake = _FakeSearchScryfall([card])
+    app.dependency_overrides[get_scryfall_service] = lambda: fake
+    headers = _auth(user)
+    async with _client() as ac:
+        deck_id = (await ac.post("/decks", headers=headers, json={"name": "EDH"})).json()["id"]
+        resp = await ac.get(f"/decks/{deck_id}/card-search?q=ring", headers=headers)
+    assert resp.status_code == 200
+    assert resp.json()[0]["name"] == "Sol Ring"
+    assert fake.last_identity == set()  # no commander → colourless-only filter
+
+
+async def test_card_search_show_all_drops_identity_filter() -> None:
+    user, card = await _seed_user_and_card()
+    fake = _FakeSearchScryfall([card])
+    app.dependency_overrides[get_scryfall_service] = lambda: fake
+    headers = _auth(user)
+    async with _client() as ac:
+        deck_id = (await ac.post("/decks", headers=headers, json={"name": "EDH"})).json()["id"]
+        await ac.get(f"/decks/{deck_id}/card-search?q=ring&show_all=true", headers=headers)
+    assert fake.last_identity is None  # show_all → no identity filter

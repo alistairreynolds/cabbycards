@@ -1,14 +1,16 @@
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user, get_owned_deck, get_scryfall_service
 from app.core.db import get_session
+from app.models.card import Card
 from app.models.deck import Deck, DeckEntry
 from app.models.enums import DeckBoard
 from app.models.user import User
+from app.schemas.card import CardOut
 from app.schemas.deck import (
     AddDeckCardRequest,
     DeckCreate,
@@ -243,3 +245,33 @@ async def remove_deck_card(
         session, deck=deck, card_id=card_id, board=board, quantity=10_000
     )
     return _view_to_schema(await build_deck_view(session, deck=deck))
+
+
+@router.get("/{deck_id}/card-search", response_model=list[CardOut])
+async def deck_card_search(
+    deck_id: uuid.UUID,
+    q: str = Query(min_length=1),
+    show_all: bool = False,
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+    scryfall: ScryfallService = Depends(get_scryfall_service),
+) -> list[CardOut]:
+    """Scryfall search filtered to the deck's commander identity + format.
+
+    ``show_all`` drops the identity filter (the 'show all' escape hatch); the
+    format-legality filter always applies.
+
+    See: tests/test_decks_api.py
+    """
+    deck = await _require_deck(session, user, deck_id)
+    identity: set[str] | None = None
+    if not show_all:
+        if deck.commander_card_id is None:
+            identity = set()
+        else:
+            commander = await session.get(Card, deck.commander_card_id)
+            identity = set(commander.data.get("color_identity", []))
+    try:
+        return await scryfall.search_cards(q, identity=identity, format=deck.format)
+    except ScryfallError as exc:
+        raise HTTPException(status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc

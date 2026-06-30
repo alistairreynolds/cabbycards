@@ -74,6 +74,8 @@ async def test_list_printings_returns_and_caches_each() -> None:
 
     def handler(request: httpx.Request) -> httpx.Response:
         assert request.url.path == "/cards/search"
+        assert "oracleid:" in request.url.params["q"]
+        assert request.url.params["unique"] == "prints"
         return httpx.Response(
             200,
             json={"data": [

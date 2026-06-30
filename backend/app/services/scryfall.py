@@ -137,7 +137,7 @@ class ScryfallService:
         return await self.search(build_scryfall_query(query, identity=identity, format=format))
 
     async def list_printings(self, oracle_id: uuid.UUID) -> list[Card]:
-        """Every printing of a card (one row per set), newest first, all cached.
+        """Every printing of a card (one row per set), in release-date order, all cached.
 
         See: tests/test_scryfall_service.py
         """

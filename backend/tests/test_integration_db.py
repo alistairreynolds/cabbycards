@@ -46,7 +46,11 @@ async def _ingest_cards(session, names: list[str]) -> None:
 
 
 async def test_ingest_populates_generated_name_and_fuzzy_search_finds_it() -> None:
-    payload = _fake_card("Sol Ring")
+    # A deliberately unique name: other DB-integration tests seed common names
+    # (e.g. "Sol Ring") in the shared database, and a limited fuzzy result set
+    # could crowd a common-named card out of the hits. A distinctive name keeps
+    # this assertion about *this* card robust to that accumulation.
+    payload = _fake_card("Brontoglyph Sentinel")
 
     def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(200, json=payload)
@@ -59,10 +63,10 @@ async def test_ingest_populates_generated_name_and_fuzzy_search_finds_it() -> No
         async with ScryfallService(session, settings=get_settings(), client=client) as service:
             card = await service.get_card(uuid.UUID(payload["id"]))
             # The generated column must have been populated from the JSONB blob.
-            assert card.name == "Sol Ring"
+            assert card.name == "Brontoglyph Sentinel"
 
         # A fuzzy, typo'd query should still surface the card via pg_trgm.
-        hits = await search_cached_cards(session, "sol rng")
+        hits = await search_cached_cards(session, "brontoglph sentinel")
         assert any(hit.scryfall_id == uuid.UUID(payload["id"]) for hit in hits)
 
 

@@ -3,10 +3,13 @@ from collections.abc import AsyncGenerator, Awaitable, Callable
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.db import get_session
 from app.core.security import TokenError, decode_access_token
+from app.models.deck import Deck
+from app.models.location import Location
 from app.models.user import User
 from app.services.email import ConsoleEmailSender, EmailSender
 from app.services.scryfall import ScryfallService
@@ -54,3 +57,15 @@ async def get_current_user(
     if user is None:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
     return user
+
+
+async def get_owned_deck(session: AsyncSession, user: User, deck_id: uuid.UUID) -> Deck | None:
+    """Fetch a deck only if its location belongs to the user (else None).
+
+    See: tests/test_decks_api.py
+    """
+    return await session.scalar(
+        select(Deck)
+        .join(Location, Deck.location_id == Location.id)
+        .where(Deck.location_id == deck_id, Location.user_id == user.id)
+    )

@@ -1,11 +1,12 @@
 from fastapi import FastAPI
 
-from app.api.routes import auth, cards, collection
+from app.api.routes import auth, cards, collection, decks
 
 app = FastAPI(title="CabbyCards API", version="0.1.0")
 app.include_router(auth.router)
 app.include_router(cards.router)
 app.include_router(collection.router)
+app.include_router(decks.router)
 
 
 @app.get("/health", tags=["meta"])

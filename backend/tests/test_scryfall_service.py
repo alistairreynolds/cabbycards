@@ -1,4 +1,7 @@
+import uuid
 from datetime import UTC, datetime, timedelta
+from types import SimpleNamespace
+from unittest.mock import AsyncMock
 
 import httpx
 import pytest
@@ -62,3 +65,34 @@ async def test_self_built_client_sets_required_headers() -> None:
     async with ScryfallService(session=None, settings=settings) as service:
         assert "CabbyCards" in service._client.headers["user-agent"]
         assert service._client.headers["accept"] == "application/json"
+
+
+async def test_list_printings_returns_and_caches_each() -> None:
+    oracle = uuid.uuid4()
+    scryfall_c21 = uuid.uuid4()
+    scryfall_ltr = uuid.uuid4()
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.path == "/cards/search"
+        assert "oracleid:" in request.url.params["q"]
+        assert request.url.params["unique"] == "prints"
+        return httpx.Response(
+            200,
+            json={"data": [
+                {"id": str(scryfall_c21), "oracle_id": str(oracle),
+                 "name": "Sol Ring", "set": "c21"},
+                {"id": str(scryfall_ltr), "oracle_id": str(oracle),
+                 "name": "Sol Ring", "set": "ltr"},
+            ]},
+        )
+
+    # SimpleNamespace stands in for Card; _ingest is mocked so no DB is needed.
+    fake_c21 = SimpleNamespace(data={"set": "c21"})
+    fake_ltr = SimpleNamespace(data={"set": "ltr"})
+
+    async with _service_with_handler(handler) as service:
+        # Replace _ingest with an async mock that returns fakes in order.
+        service._ingest = AsyncMock(side_effect=[fake_c21, fake_ltr])
+        printings = await service.list_printings(oracle)
+
+    assert {p.data["set"] for p in printings} == {"c21", "ltr"}

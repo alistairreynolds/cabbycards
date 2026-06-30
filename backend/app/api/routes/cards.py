@@ -38,6 +38,26 @@ async def local_search(
     return list(await search_cached_cards(session, q))
 
 
+# The printings route must appear before /{scryfall_id} so the static suffix is
+# not swallowed by the dynamic segment.
+@router.get("/{scryfall_id}/printings", response_model=list[CardOut])
+async def card_printings(
+    scryfall_id: uuid.UUID,
+    service: ScryfallService = Depends(get_scryfall_service),
+) -> list[CardOut]:
+    """All printings of a card (for the printing/finish selector).
+
+    See: tests/test_cards_api.py
+    """
+    try:
+        card = await service.get_card(scryfall_id)
+        if card.oracle_id is None:
+            return [card]
+        return await service.list_printings(card.oracle_id)
+    except ScryfallError as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+
 # Declared after the static paths above so they are not swallowed by this route.
 @router.get("/{scryfall_id}", response_model=CardOut)
 async def get_card(

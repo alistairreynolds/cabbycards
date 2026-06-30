@@ -242,7 +242,7 @@ async def delete_deck(session: AsyncSession, *, deck: Deck) -> None:
     location = await session.get(Location, deck.location_id)
     await session.delete(location)  # cascades to deck + deck_entries
     await session.commit()
-    await session.invalidate()  # flush identity map so callers see the deletion
+    session.expire_all()  # clear identity map so subsequent get() re-queries
 
 
 async def build_deck_view(session: AsyncSession, *, deck: Deck) -> dict:

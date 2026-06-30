@@ -50,10 +50,12 @@ async def _make_card(session, *, name="Sol Ring", oracle=None) -> Card:
 
 
 async def _qty_at(session, location_id, card_id) -> int:
-    holding = await session.scalar(
-        select(Holding).where(Holding.location_id == location_id, Holding.card_id == card_id)
-    )
-    return holding.quantity if holding else 0
+    holdings = (
+        await session.scalars(
+            select(Holding).where(Holding.location_id == location_id, Holding.card_id == card_id)
+        )
+    ).all()
+    return sum(h.quantity for h in holdings)
 
 
 async def test_add_card_owned_auto_allocates_from_storage() -> None:
@@ -181,8 +183,11 @@ async def test_delete_deck_relocates_holdings_and_removes_deck() -> None:
             session, deck=deck, card_id=card.id, board=DeckBoard.MAIN, quantity=1
         )
         deck_location_id = deck.location_id
+        # Capture plain ints before delete_deck's expire_all clears the identity map.
+        storage_id = storage.id
+        card_id = card.id
 
         await delete_deck(session, deck=deck)
 
         assert await session.get(Deck, deck_location_id) is None
-        assert await _qty_at(session, storage.id, card.id) == 1
+        assert await _qty_at(session, storage_id, card_id) == 1

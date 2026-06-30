@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings, get_settings
 from app.models.card import Card
+from app.models.enums import DeckFormat
 
 # Scryfall asks clients to leave 50-100ms between requests (a ~10 req/s ceiling).
 # Going faster risks an HTTP 429 and, repeatedly, an IP ban.
@@ -18,6 +19,29 @@ _REQUEST_DELAY_SECONDS = 0.1
 
 class ScryfallError(RuntimeError):
     """Raised when Scryfall returns an error or an unexpected payload."""
+
+
+def build_scryfall_query(
+    terms: str, *, identity: set[str] | None = None, format: DeckFormat | None = None
+) -> str:
+    """Append colour-identity + format-legality filters to a Scryfall query.
+
+    ``identity`` is a set of single-letter colours (the commander's identity); an
+    empty set means a colourless commander, so only colourless cards are legal
+    (``id:c``). A non-empty set uses Scryfall's subset operator (``id<=wu``).
+    ``None`` adds no identity filter.
+
+    See: tests/test_scryfall_query.py
+    """
+    parts = [terms.strip()]
+    if identity is not None:
+        if identity:
+            parts.append(f"id<={''.join(sorted(c.lower() for c in identity))}")
+        else:
+            parts.append("id:c")
+    if format is not None:
+        parts.append(f"legal:{format.value}")
+    return " ".join(part for part in parts if part)
 
 
 def is_card_stale(cached_at: datetime | None, now: datetime, ttl_days: int) -> bool:
@@ -98,6 +122,30 @@ class ScryfallService:
         for data in payload.get("data", []):
             results.append(await self._ingest(data))
         return results
+
+    async def search_cards(
+        self,
+        query: str,
+        *,
+        identity: set[str] | None = None,
+        format: DeckFormat | None = None,
+    ) -> list[Card]:
+        """Search Scryfall with colour-identity + format filters applied.
+
+        See: tests/test_scryfall_service.py
+        """
+        return await self.search(build_scryfall_query(query, identity=identity, format=format))
+
+    async def list_printings(self, oracle_id: uuid.UUID) -> list[Card]:
+        """Every printing of a card (one row per set), newest first, all cached.
+
+        See: tests/test_scryfall_service.py
+        """
+        payload = await self._fetch(
+            "/cards/search",
+            params={"q": f"oracleid:{oracle_id}", "unique": "prints", "order": "released"},
+        )
+        return [await self._ingest(data) for data in payload.get("data", [])]
 
     async def _fetch(self, path: str, *, params: dict[str, Any] | None = None) -> dict[str, Any]:
         await asyncio.sleep(_REQUEST_DELAY_SECONDS)

@@ -37,6 +37,8 @@ function logout(): void {
             {{ theme.isDark ? "☀️" : "🌙" }}
           </button>
           <template v-if="auth.isAuthenticated">
+            <RouterLink to="/" class="hover:text-brand-500">Collection</RouterLink>
+            <RouterLink to="/decks" class="hover:text-brand-500">Decks</RouterLink>
             <span class="hidden text-slate-500 sm:inline">{{ auth.user?.email }}</span>
             <button type="button" class="hover:text-brand-500" @click="logout">Log out</button>
           </template>

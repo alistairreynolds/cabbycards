@@ -270,7 +270,9 @@ async def deck_card_search(
             identity = set()
         else:
             commander = await session.get(Card, deck.commander_card_id)
-            identity = set(commander.data.get("color_identity", []))
+            identity = set()
+            if commander is not None:
+                identity = set(commander.data.get("color_identity", []))
     try:
         return await scryfall.search_cards(q, identity=identity, format=deck.format)
     except ScryfallError as exc:

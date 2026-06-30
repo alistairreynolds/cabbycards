@@ -1,6 +1,6 @@
 <!-- frontend/src/components/PrintingSelector.vue -->
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue"
+import { computed, onMounted, ref, watch } from "vue"
 
 import { apiFetch } from "@/lib/api"
 
@@ -27,6 +27,10 @@ onMounted(async () => {
 
 const selected = computed(() => printings.value.find((p) => p.scryfall_id === selectedId.value))
 const finishes = computed(() => selected.value?.data.finishes ?? ["nonfoil"])
+
+watch(selectedId, () => {
+  finish.value = finishes.value[0] ?? "nonfoil"
+})
 
 function confirm(): void {
   emit("select", {

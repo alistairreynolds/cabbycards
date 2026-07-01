@@ -5,6 +5,7 @@ import { useRoute } from "vue-router"
 import AddCardSearch from "@/components/AddCardSearch.vue"
 import PrintingSelector from "@/components/PrintingSelector.vue"
 import { useDecksStore, type DeckCard } from "@/stores/decks"
+import type { SearchCard } from "@/types/cards"
 
 const store = useDecksStore()
 const route = useRoute()
@@ -36,13 +37,18 @@ const columns = computed(() => {
   return TYPE_ORDER.filter((t) => groups[t]?.length).map((t) => ({ type: t, cards: groups[t] }))
 })
 
+// Header shows total copies (summed desired qty), not the distinct-entry count —
+// a 100-card deck with 30-odd basics should still read 100.
+function columnCount(cards: DeckCard[]): number {
+  return cards.reduce((total, card) => total + card.desired_quantity, 0)
+}
+
 function ownershipClass(card: DeckCard): string {
   if (card.missing_quantity > 0) return "text-red-600"
   if (card.allocated_quantity < card.desired_quantity) return "text-amber-600"
   return "text-emerald-600"
 }
 
-interface SearchCard { scryfall_id: string; name: string; data: Record<string, unknown> }
 const picked = ref<SearchCard | null>(null)
 
 function onPick(card: SearchCard): void {
@@ -84,7 +90,7 @@ async function onSelectPrinting(payload: { scryfall_id: string; foil: boolean; c
     <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
       <div v-for="column in columns" :key="column.type">
         <h2 class="mb-2 text-sm font-medium text-slate-600 dark:text-slate-300">
-          {{ column.type }} ({{ column.cards.length }})
+          {{ column.type }} ({{ columnCount(column.cards) }})
         </h2>
         <ul class="space-y-1">
           <li
@@ -112,12 +118,15 @@ async function onSelectPrinting(payload: { scryfall_id: string; foil: boolean; c
 
     <aside class="mt-6">
       <h2 class="mb-2 text-sm font-medium">Add a card</h2>
-      <AddCardSearch :search-path="`/decks/${deckId}/card-search`" @add="onPick" />
+      <!-- Searching for a different card mid-add breaks the flow, so the
+           search is swapped out until the add is confirmed or cancelled. -->
+      <AddCardSearch v-if="!picked" :search-path="`/decks/${deckId}/card-search`" @add="onPick" />
       <PrintingSelector
-        v-if="picked"
+        v-else
         :oracle-scryfall-id="picked.scryfall_id"
-        class="mt-3"
+        confirm-label="Add to deck"
         @select="onSelectPrinting"
+        @cancel="picked = null"
       />
     </aside>
   </section>

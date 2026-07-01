@@ -2,7 +2,9 @@
 import { computed, onMounted, ref } from "vue"
 
 import AddCardSearch from "@/components/AddCardSearch.vue"
+import PrintingSelector from "@/components/PrintingSelector.vue"
 import { type Holding, useCollectionStore } from "@/stores/collection"
+import type { SearchCard } from "@/types/cards"
 
 const collection = useCollectionStore()
 
@@ -10,6 +12,7 @@ const ALL = "all"
 const selectedLocationId = ref<string>(ALL)
 const newLocationName = ref("")
 const showAdd = ref(false)
+const picked = ref<SearchCard | null>(null)
 
 onMounted(async () => {
   await Promise.all([collection.fetchLocations(), collection.fetchCollection()])
@@ -30,11 +33,19 @@ function thumbnail(holding: Holding): string | undefined {
   return data.image_uris?.normal ?? data.card_faces?.[0]?.image_uris?.normal
 }
 
-async function onAdd(card: { scryfall_id: string }): Promise<void> {
+function onPick(card: SearchCard): void {
+  picked.value = card
+}
+
+async function onSelectPrinting(
+  payload: { scryfall_id: string; foil: boolean; condition: string },
+): Promise<void> {
+  // "All cards" has no single target, so fall back to the first location.
   const target = selectedLocationId.value === ALL ? collection.locations[0]?.id : selectedLocationId.value
   if (target) {
-    await collection.addCard(card.scryfall_id, target)
+    await collection.addCard(payload.scryfall_id, target, 1, payload.foil, payload.condition)
   }
+  picked.value = null
 }
 
 async function createLocation(): Promise<void> {
@@ -96,7 +107,18 @@ async function createLocation(): Promise<void> {
         </button>
       </div>
 
-      <AddCardSearch v-if="showAdd" class="mb-4" @add="onAdd" />
+      <div v-if="showAdd" class="mb-4">
+        <!-- Searching for a different card mid-add breaks the flow, so the
+             search is swapped out until the add is confirmed or cancelled. -->
+        <AddCardSearch v-if="!picked" @add="onPick" />
+        <PrintingSelector
+          v-else
+          :oracle-scryfall-id="picked.scryfall_id"
+          confirm-label="Add to collection"
+          @select="onSelectPrinting"
+          @cancel="picked = null"
+        />
+      </div>
 
       <p v-if="!visibleHoldings.length" class="text-slate-500">
         No cards here yet. Click "Add cards" to search and add some.

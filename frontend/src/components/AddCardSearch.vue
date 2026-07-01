@@ -3,12 +3,7 @@ import { nextTick, onMounted, onUnmounted, ref, watch } from "vue"
 
 import { apiFetch } from "@/lib/api"
 import { debounce } from "@/lib/debounce"
-
-interface SearchCard {
-  scryfall_id: string
-  name: string
-  data: Record<string, unknown>
-}
+import type { SearchCard } from "@/types/cards"
 
 const DEBOUNCE_MS = 200
 

@@ -91,7 +91,9 @@ def deck_violations(
 
 def _oracle_key(card: Card) -> str:
     # Group printings by oracle id for ownership maths; cards without one key on
-    # their own id so they only ever match themselves.
+    # their own id so they only ever match themselves. The ``cid:`` sentinel can't
+    # collide with a real oracle key: an oracle_id renders as a UUID string (hex +
+    # hyphens, no colon), so it can never equal a ``cid:<int>`` value.
     return str(card.oracle_id) if card.oracle_id is not None else f"cid:{card.id}"
 
 
@@ -287,9 +289,16 @@ async def build_deck_view(session: AsyncSession, *, deck: Deck) -> dict:
             # committed to other decks are not available to fill this deck's gaps.
             owned_elsewhere_by_key[key] = owned_elsewhere_by_key.get(key, 0) + holding.quantity
 
+    # Resolve every entry's card in one query rather than a per-row session.get.
+    entry_card_ids = {entry.card_id for entry in entries}
+    cards_by_id: dict[int, Card] = {}
+    if entry_card_ids:
+        entry_cards = await session.scalars(select(Card).where(Card.id.in_(entry_card_ids)))
+        cards_by_id = {card.id: card for card in entry_cards}
+
     rows: list[dict] = []
     for entry in entries:
-        card = await session.get(Card, entry.card_id)
+        card = cards_by_id[entry.card_id]
         key = _oracle_key(card)
         allocated = allocated_by_key.get(key, 0)
         owned_elsewhere = owned_elsewhere_by_key.get(key, 0)

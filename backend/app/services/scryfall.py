@@ -22,7 +22,7 @@ class ScryfallError(RuntimeError):
 
 
 def build_scryfall_query(
-    terms: str, *, identity: set[str] | None = None, format: DeckFormat | None = None
+    terms: str, *, identity: set[str] | None = None, deck_format: DeckFormat | None = None
 ) -> str:
     """Append colour-identity + format-legality filters to a Scryfall query.
 
@@ -39,8 +39,8 @@ def build_scryfall_query(
             parts.append(f"id<={''.join(sorted(c.lower() for c in identity))}")
         else:
             parts.append("id:c")
-    if format is not None:
-        parts.append(f"legal:{format.value}")
+    if deck_format is not None:
+        parts.append(f"legal:{deck_format.value}")
     return " ".join(part for part in parts if part)
 
 
@@ -128,13 +128,15 @@ class ScryfallService:
         query: str,
         *,
         identity: set[str] | None = None,
-        format: DeckFormat | None = None,
+        deck_format: DeckFormat | None = None,
     ) -> list[Card]:
         """Search Scryfall with colour-identity + format filters applied.
 
         See: tests/test_scryfall_service.py
         """
-        return await self.search(build_scryfall_query(query, identity=identity, format=format))
+        return await self.search(
+            build_scryfall_query(query, identity=identity, deck_format=deck_format)
+        )
 
     async def list_printings(self, oracle_id: uuid.UUID) -> list[Card]:
         """Every printing of a card (one row per set), in release-date order, all cached.

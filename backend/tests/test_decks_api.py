@@ -121,7 +121,7 @@ class _FakeSearchScryfall:
         self._results = results
         self.last_identity = "unset"
 
-    async def search_cards(self, query, *, identity=None, format=None):
+    async def search_cards(self, query, *, identity=None, deck_format=None):
         self.last_identity = identity
         return self._results
 

@@ -278,7 +278,7 @@ async def deck_card_search(
             if commander is not None:
                 identity = set(commander.data.get("color_identity", []))
     try:
-        cards = await scryfall.search_cards(q, identity=identity, format=deck.format)
+        cards = await scryfall.search_cards(q, identity=identity, deck_format=deck.format)
     except ScryfallError as exc:
         raise HTTPException(status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc
     return sorted(cards, key=lambda card: name_sort_key(q, card.name))

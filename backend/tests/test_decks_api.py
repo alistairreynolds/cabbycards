@@ -150,6 +150,39 @@ async def test_card_search_show_all_drops_identity_filter() -> None:
     assert fake.last_identity is None  # show_all → no identity filter
 
 
+async def test_card_search_reranks_by_name_relevance() -> None:
+    """Deck search must re-rank by typed-name relevance, like the collection search.
+
+    Scryfall returns full-text relevance order (surfacing "Solarion" ahead of
+    "Sol Ring" for "sol ri"); the route re-ranks so the prefix match wins.
+    """
+    user, _ = await _seed_user_and_card()
+    async with async_session_factory() as session:
+        solarion = Card(
+            scryfall_id=uuid.uuid4(),
+            oracle_id=uuid.uuid4(),
+            data={"id": str(uuid.uuid4()), "name": "Solarion", "color_identity": []},
+        )
+        sol_ring = Card(
+            scryfall_id=uuid.uuid4(),
+            oracle_id=uuid.uuid4(),
+            data={"id": str(uuid.uuid4()), "name": "Sol Ring", "color_identity": []},
+        )
+        session.add_all([solarion, sol_ring])
+        await session.commit()
+        await session.refresh(solarion)
+        await session.refresh(sol_ring)
+    fake = _FakeSearchScryfall([solarion, sol_ring])  # Scryfall's (wrong) order
+    app.dependency_overrides[get_scryfall_service] = lambda: fake
+    headers = _auth(user)
+    async with _client() as ac:
+        deck_id = (await ac.post("/decks", headers=headers, json={"name": "EDH"})).json()["id"]
+        resp = await ac.get(f"/decks/{deck_id}/card-search?q=sol+ri", headers=headers)
+    assert resp.status_code == 200
+    names = [c["name"] for c in resp.json()]
+    assert names == ["Sol Ring", "Solarion"]
+
+
 async def test_patch_deck_card_updates_desired_quantity() -> None:
     user, card = await _seed_user_and_card()
     app.dependency_overrides[get_scryfall_service] = lambda: _FakeScryfall(card)

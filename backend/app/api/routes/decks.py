@@ -19,6 +19,7 @@ from app.schemas.deck import (
     DeckView,
     UpdateDeckCardRequest,
 )
+from app.services.card_search import name_sort_key
 from app.services.deck_builder import (
     add_card_to_deck,
     build_deck_view,
@@ -259,7 +260,10 @@ async def deck_card_search(
     """Scryfall search filtered to the deck's commander identity + format.
 
     ``show_all`` drops the identity filter (the 'show all' escape hatch); the
-    format-legality filter always applies.
+    format-legality filter always applies. Results are re-ranked by name
+    relevance to ``q`` — identically to the collection ``/cards/search`` route —
+    since Scryfall returns full-text relevance order (surfacing "Solarion" ahead
+    of "Sol Ring" for "sol ri").
 
     See: tests/test_decks_api.py
     """
@@ -274,6 +278,7 @@ async def deck_card_search(
             if commander is not None:
                 identity = set(commander.data.get("color_identity", []))
     try:
-        return await scryfall.search_cards(q, identity=identity, format=deck.format)
+        cards = await scryfall.search_cards(q, identity=identity, format=deck.format)
     except ScryfallError as exc:
         raise HTTPException(status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc
+    return sorted(cards, key=lambda card: name_sort_key(q, card.name))
